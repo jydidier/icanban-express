@@ -1,0 +1,12 @@
+{
+    "port": 3000,
+    "server": {
+        "serverUrl" : "",
+        "credentials" : {
+            "username": "",
+            "password": ""
+        },
+        "authMethod": "Basic",
+        "defaultAccountType": "caldav"
+    }
+}

@@ -1,28 +1,5 @@
 import tsdav from './tsdav.js';
 
-const clientObject = localStorage.getItem('davClient');
-
-
-let client = {};
-if (clientObject) {
-    client = new tsdav.DAVClient({ clientObject});
-} else {
-    client = new tsdav.DAVClient({
-        serverUrl : 'https://partage.univ-evry.fr/dav/jeanyves.didier@univ-evry.fr/',
-        credentials: {
-            username : '',
-            password : ''
-        },
-        authMethod: 'Basic',
-        defaultAccountType: 'caldav',        
-    });
-
-    globalThis.fetch.bind(globalThis)
-    //const fetch = window.fetch.bind(window);
-    await  client.login();
-}
-
-
 const calendars = {
     query: async function () {
         if (client) {
@@ -77,3 +54,5 @@ class CalendarItem {
 }
 
 await calendars.query();
+
+export { calendars, items, Calendar, CalendarItem };
