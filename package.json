@@ -1,0 +1,30 @@
+{
+  "name": "icanban-express",
+  "version": "1.0.0",
+  "description": "Displays and manage caldav's todo items in a Kanban board",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jydidier/icanban-express.git"
+  },
+  "keywords": [
+    "kanban",
+    "caldav",
+    "ical",
+    "todo"
+  ],
+  "author": "Jean-Yves Didier",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jydidier/icanban-express/issues"
+  },
+  "homepage": "https://github.com/jydidier/icanban-express#readme",
+  "dependencies": {
+    "express": "^4.21.0",
+    "ical.js": "^2.1.0",
+    "tsdav": "^2.1.2"
+  }
+}
