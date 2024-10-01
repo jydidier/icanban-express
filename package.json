@@ -16,7 +16,7 @@
     "ical",
     "todo"
   ],
-  "type" : "module",
+  "type": "module",
   "author": "Jean-Yves Didier",
   "license": "ISC",
   "bugs": {
@@ -24,8 +24,8 @@
   },
   "homepage": "https://github.com/jydidier/icanban-express#readme",
   "dependencies": {
+    "dav": "github:mitsol/dav",
     "express": "^4.21.0",
-    "ical.js": "^2.1.0",
-    "tsdav": "^2.1.2"
+    "ical.js": "^2.1.0"
   }
 }

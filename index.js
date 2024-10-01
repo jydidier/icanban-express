@@ -1,4 +1,4 @@
-import tsdav from 'tsdav';
+import dav from 'dav';
 import ical from 'ical.js';
 import express from 'express';
 import process from 'node:process';
@@ -13,23 +13,83 @@ if (process.argv.length > 2) {
 
 const config = cdefault.default;
 
+const app = express();
+
+
 /*****************************************************************************
  * This part is dedicated to calendar management
  * **************************************************************************/
 
-const client = new tsdav.DAVClient( config.server );
-await client.login();
+const xhr = new dav.transport.Basic(
+    new dav.Credentials({
+        username: config.server.credentials.username,
+        password: config.server.credentials.password
+    })
+);
+
+const account = await dav.createAccount({
+    server: config.server.serverUrl,
+    xhr: xhr,
+    //loadObjects: true
+});
+
+console.log(account);
+
+let calendars = account.calendars.filter(calendar => {
+    return calendar.components.includes('VTODO')
+}).sort((a,b) => {
+    return a.displayName.localeCompare(b.displayName);
+}); 
+
+// yes ! we have colors !
+let req = dav.request.propfind({
+    props: [
+        { name: 'displayname', namespace: 'DAV:' },
+        { name: 'getctag', namespace: 'http://calendarserver.org/ns/' },
+        { name: 'calendar-color', namespace: 'http://apple.com/ns/ical/' }        
+    ],
+    depth: 1    
+});
+
+let responses = await xhr.send(req, account.homeUrl);
+
+console.log(responses);
+
+let colors = {};
+
+responses.forEach(response => {
+    colors[response.props.getctag] = response.props.calendarColor ? response.props.calendarColor : 'white';
+});   
+
+
 
 app.get( '/calendars', async (req, res) => {
-    let cal = await client.fetchCalendars();
-    console.log(cal);
+    //let cal = await client.fetchCalendars();
+    let list = calendars.map(calendar => {
+        return {
+            id: calendar.ctag,
+            name: calendar.displayName,
+            color: colors[calendar.ctag],
+            url: calendar.url
+        }
+    });
 
-    res.json();
+
+    //console.log(cal);
+
+    res.json(list);
 }); 
 
 app.get( '/calendar/:id', (req, res) => {
     console.log(req.params.id);
-    res.json();
+    let calendar = calendars.find(calendar => calendar.ctag === req.params.id);
+
+    res.json({
+        id: calendar.ctag,
+        name: calendar.displayName,
+        color: colors[calendar.ctag],
+        url: calendar.url
+    });
 });
 
 
@@ -40,7 +100,6 @@ app.get( '/calendar/:id', (req, res) => {
 /*****************************************************************************
  * This part is required for the express backend
  * **************************************************************************/
-const app = express();
 app.use(express.json());
 
 app.use('/ui', express.static('ui'));
