@@ -16,6 +16,7 @@
     "ical",
     "todo"
   ],
+  "type" : "module",
   "author": "Jean-Yves Didier",
   "license": "ISC",
   "bugs": {
