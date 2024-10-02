@@ -98,7 +98,7 @@ app.get( '/calendars', async (req, res) => {
     res.json(list);
 }); 
 
-app.get( '/calendar/:id', (req, res) => {
+app.get( '/calendars/:id', (req, res) => {
     console.log(req.params.id);
     let calendar = calendars.find(calendar => calendar.ctag === req.params.id);
 
@@ -114,7 +114,7 @@ app.get( '/items', (req, res) => {
     res.json(items);
 });
 
-app.get( '/item/:cid/:id', (req, res) => {
+app.get( '/items/:cid/:id', (req, res) => {
     let item = items.find(item => item.id === req.params.id && item.calendarId === req.params.cid);
     res.json(item);
 });

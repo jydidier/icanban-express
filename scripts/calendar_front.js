@@ -11,7 +11,7 @@ calendars.query = async function() {
 }; // is in fact without any filter
 
 calendars.get = async function(id) {
-    let url = `${location.origin}/calendar/${id}`;
+    let url = `${location.origin}/calendars/${id}`;
     let response = await fetch(url);
     let calendar = await response.json();
     console.log(calendar);
@@ -25,7 +25,7 @@ calendars.get = async function(id) {
 
 const items = new EventTarget();
 items.get = async function(calendarId, id) {
-    let url = `${location.origin}/item/${calendarId}/${id}`;
+    let url = `${location.origin}/items/${calendarId}/${id}`;
     let response = await fetch(url);
     let item = await response.json();
     console.log(item);
