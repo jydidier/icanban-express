@@ -24,7 +24,13 @@ calendars.get = async function(id) {
 // }
 
 const items = new EventTarget();
-items.get = function() {};
+items.get = async function(calendarId, id) {
+    let url = `${location.origin}/item/${calendarId}/${id}`;
+    let response = await fetch(url);
+    let item = await response.json();
+    console.log(item);
+    return item ;
+};
 items.query = async function() {
     let url = location.origin + '/items';
     let response = await fetch(url);

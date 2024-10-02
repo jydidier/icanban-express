@@ -114,8 +114,8 @@ app.get( '/items', (req, res) => {
     res.json(items);
 });
 
-app.get( '/item/:id', (req, res) => {
-    let item = items.find(item => item.id === req.params.id);
+app.get( '/item/:cid/:id', (req, res) => {
+    let item = items.find(item => item.id === req.params.id && item.calendarId === req.params.cid);
     res.json(item);
 });
 
