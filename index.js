@@ -2,6 +2,7 @@ import dav from 'dav';
 import ical from 'ical.js';
 import express from 'express';
 import process from 'node:process';
+import open from 'open';
 
 let cdefault = {};
 
@@ -30,10 +31,21 @@ const xhr = new dav.transport.Basic(
 const account = await dav.createAccount({
     server: config.server.serverUrl,
     xhr: xhr,
-    //loadObjects: true
+    loadObjects: true,
+    filters: [
+        {
+            type: 'comp-filter',
+            attrs: {name: 'VCALENDAR'},
+            children: [
+                {
+                    type: 'comp-filter',
+                    attrs: { name: 'VTODO' }
+                }
+            ]
+        }   
+    ]
 });
 
-console.log(account);
 
 let calendars = account.calendars.filter(calendar => {
     return calendar.components.includes('VTODO')
@@ -41,7 +53,21 @@ let calendars = account.calendars.filter(calendar => {
     return a.displayName.localeCompare(b.displayName);
 }); 
 
-// yes ! we have colors !
+
+let items = [];
+
+calendars.forEach(calendar => {
+    calendar.objects.forEach(object => {
+        items.push({
+            id : object.etag,
+            calendarId : calendar.ctag,
+            type: 'task',
+            format: 'jcal',
+            item: ical.parse(object.calendarData) // item must be in jcal format
+        });
+    });
+});
+
 let req = dav.request.propfind({
     props: [
         { name: 'displayname', namespace: 'DAV:' },
@@ -53,8 +79,6 @@ let req = dav.request.propfind({
 
 let responses = await xhr.send(req, account.homeUrl);
 
-console.log(responses);
-
 let colors = {};
 
 responses.forEach(response => {
@@ -62,9 +86,7 @@ responses.forEach(response => {
 });   
 
 
-
 app.get( '/calendars', async (req, res) => {
-    //let cal = await client.fetchCalendars();
     let list = calendars.map(calendar => {
         return {
             id: calendar.ctag,
@@ -73,10 +95,6 @@ app.get( '/calendars', async (req, res) => {
             url: calendar.url
         }
     });
-
-
-    //console.log(cal);
-
     res.json(list);
 }); 
 
@@ -92,10 +110,14 @@ app.get( '/calendar/:id', (req, res) => {
     });
 });
 
+app.get( '/items', (req, res) => {
+    res.json(items);
+});
 
-
-
-
+app.get( '/item/:id', (req, res) => {
+    let item = items.find(item => item.id === req.params.id);
+    res.json(item);
+});
 
 /*****************************************************************************
  * This part is required for the express backend
@@ -106,5 +128,6 @@ app.use('/ui', express.static('ui'));
 app.use('/scripts', express.static('scripts'));
 
 app.listen(config.port, () => {
-    console.log(`Open browser with address : http://localhost:${config.port}/ui/board.html`);
+    console.log(`Server started on http://localhost:${config.port}`);
+    open(`http://localhost:${config.port}/ui/board.html`);
 });

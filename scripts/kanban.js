@@ -7,7 +7,14 @@
 
 import * as JCAL from './jcal.js';
 
-const mc = messenger.calendar;
+let mc = {};
+
+if (globalThis.messenger !== undefined) {
+    mc = messenger.calendar;
+} else {
+    mc = await import('./calendar_front.js');
+    console.log(mc);
+}
 
 let filter = {};
 let sort = null;
@@ -224,7 +231,11 @@ if (applyFilterButton) {
             filter.priority = priorities[0];
         }
 
-        await browser.storage.local.set({"icanban-filter": filter});
+        if( globalThis.browser !== undefined) {
+            await browser.storage.local.set({"icanban-filter": filter});
+        } else {
+            localStorage.setItem("icanban-filter", JSON.stringify(filter));
+        }
         refreshBoard();
     });
 }
@@ -293,7 +304,11 @@ if (applySortButton) {
     applySortButton.addEventListener('click', async (event) => {
         let sortValue = Array.from(document.querySelectorAll('#sortList input')).find(input => input.checked).value;
         sort = (sortValue === "none") ? null : sortStrategies[sortValue];
-        await browser.storage.local.set({ "icanban-sort": sortValue} );   
+        if( globalThis.browser !== undefined) {
+            await browser.storage.local.set({ "icanban-sort": sortValue} );   
+        } else {
+            localStorage.setItem("icanban-sort", JSON.stringify(sortValue));
+        }
         refreshBoard();
     });
 }
@@ -454,8 +469,16 @@ let refreshBoard = async () => {
     }
 };
 
-let filterPrefs = await browser.storage.local.get("icanban-filter");
-let sortPrefs = await browser.storage.local.get("icanban-sort");
+
+let filterPrefs = {};
+let sortPrefs = {};
+if (globalThis.browser !== undefined) {
+    filterPrefs = await browser.storage.local.get("icanban-filter");
+    sortPrefs = await browser.storage.local.get("icanban-sort");
+} else {
+    filterPrefs = JSON.parse(localStorage.getItem("icanban-filter")) ?? {};
+    sortPrefs = JSON.parse(localStorage.getItem("icanban-sort")) ?? {};
+}
 
 if (filterPrefs["icanban-filter"] !== undefined) {
     filter = filterPrefs["icanban-filter"];
@@ -467,10 +490,20 @@ if (sortPrefs["icanban-sort"] !== undefined) {
 
 await populateBoard();
 
-mc.items.onCreated.addListener(refreshBoard);
-mc.items.onUpdated.addListener(refreshBoard);
-mc.items.onRemoved.addListener(refreshBoard);
+if (globalThis.messenger !== undefined) {
+    mc.items.onCreated.addListener(refreshBoard);
+    mc.items.onUpdated.addListener(refreshBoard);
+    mc.items.onRemoved.addListener(refreshBoard);
 
-mc.calendars.onCreated.addListener(refreshBoard);
-mc.calendars.onUpdated.addListener(refreshBoard);
-mc.calendars.onRemoved.addListener(refreshBoard);
+    mc.calendars.onCreated.addListener(refreshBoard);
+    mc.calendars.onUpdated.addListener(refreshBoard);
+    mc.calendars.onRemoved.addListener(refreshBoard);
+} else {
+    mc.items.addEventListener("created",refreshBoard);
+    mc.items.addEventListener("updated",refreshBoard);
+    mc.items.addEventListener("removed",refreshBoard);
+
+    mc.calendars.addEventListener("created",refreshBoard);
+    mc.calendars.addEventListener("updated",refreshBoard);
+    mc.calendars.addEventListener("removed",refreshBoard);
+}

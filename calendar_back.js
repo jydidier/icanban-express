@@ -18,7 +18,10 @@ const calendars = {
 
 const items = {
     get: function() {},
-    query: function() {},
+    query: async function() {
+
+        
+    },
     create: function() {},
     update: function() {},
     move: function() {},
