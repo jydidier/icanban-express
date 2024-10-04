@@ -58,12 +58,16 @@ let items = [];
 
 calendars.forEach(calendar => {
     calendar.objects.forEach(object => {
+        //console.log(calendar.c);
         items.push({
-            id : object.etag,
+            id : object.etag.replaceAll('"',''),
             calendarId : calendar.ctag,
             type: 'task',
             format: 'jcal',
-            item: ical.parse(object.calendarData) // item must be in jcal format
+            item: ical.parse(object.calendarData) 
+            // in calendar.props we have also the calendarTimezone property 
+            // that could be used
+            // item must be in jcal format
         });
     });
 });
@@ -99,7 +103,6 @@ app.get( '/calendars', async (req, res) => {
 }); 
 
 app.get( '/calendars/:id', (req, res) => {
-    console.log(req.params.id);
     let calendar = calendars.find(calendar => calendar.ctag === req.params.id);
 
     res.json({
@@ -115,8 +118,32 @@ app.get( '/items', (req, res) => {
 });
 
 app.get( '/items/:cid/:id', (req, res) => {
-    let item = items.find(item => item.id === req.params.id && item.calendarId === req.params.cid);
+    let item = items.find(
+        item => item.id === req.params.id && item.calendarId === req.params.cid
+    );
     res.json(item);
+});
+
+
+app.delete('/items/:cid/:id', async (req, res) => {
+    let calendar = calendars.find(calendar => calendar.ctag === req.params.cid);
+    if (calendar) {
+        let objectToRemove = calendar.objects.find(item =>
+            item.etag === `"${req.params.id}"`
+        );
+        if (objectToRemove) {
+            console.log(objectToRemove, xhr);
+            try {
+                await dav.deleteCalendarObject(objectToRemove, { xhr: xhr});
+            } catch(err) {
+                console.log(err);
+            }
+            res.status(200);
+        } else { res.status(404); }
+    } else {
+        res.status(404);
+    }
+    res.status(200);
 });
 
 /*****************************************************************************
