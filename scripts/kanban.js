@@ -330,7 +330,7 @@ if (sortModal) {
 const refreshButton = document.getElementById('refreshButton');
 if (refreshButton) {
     refreshButton.addEventListener('click', async (event) => {
-        refreshBoard();
+        await refreshBoard();
     });
 }
 
@@ -461,6 +461,7 @@ let populateBoard = async () => {
 let inRefresh = false;
 
 let refreshBoard = async () => {
+    console.log('refreshing board');
     if (!inRefresh) {
         inRefresh = true;
         clearBoard();
@@ -499,11 +500,13 @@ if (globalThis.messenger !== undefined) {
     mc.calendars.onUpdated.addListener(refreshBoard);
     mc.calendars.onRemoved.addListener(refreshBoard);
 } else {
+    console.log("preparing events");
+
     mc.items.addEventListener("created",refreshBoard);
     mc.items.addEventListener("updated",refreshBoard);
     mc.items.addEventListener("removed",refreshBoard);
 
-    mc.calendars.addEventListener("created",refreshBoard);
-    mc.calendars.addEventListener("updated",refreshBoard);
-    mc.calendars.addEventListener("removed",refreshBoard);
+    mc.calendars.element.addEventListener("created",refreshBoard);
+    mc.calendars.element.addEventListener("updated",refreshBoard);
+    mc.calendars.element.addEventListener("removed",refreshBoard);
 }

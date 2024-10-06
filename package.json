@@ -24,9 +24,10 @@
   },
   "homepage": "https://github.com/jydidier/icanban-express#readme",
   "dependencies": {
-    "dav": "github:mitsol/dav",
     "express": "^4.21.0",
     "ical.js": "^2.1.0",
-    "open": "^10.1.0"
+    "open": "^10.1.0",
+    "tsdav": "^2.1.2",
+    "uuid": "^10.0.0"
   }
 }

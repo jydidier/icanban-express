@@ -1,8 +1,11 @@
-import dav from 'dav';
+import tsdav from 'tsdav';
 import ical from 'ical.js';
 import express from 'express';
 import process from 'node:process';
 import open from 'open';
+import bodyParser from 'body-parser';
+import * as uuid from 'uuid';
+import * as JCAL from './scripts/jcal.js';
 
 let cdefault = {};
 
@@ -15,87 +18,72 @@ if (process.argv.length > 2) {
 const config = cdefault.default;
 
 const app = express();
-
+app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 /*****************************************************************************
  * This part is dedicated to calendar management
  * **************************************************************************/
+const client = new tsdav.DAVClient(config.server);
 
-const xhr = new dav.transport.Basic(
-    new dav.Credentials({
-        username: config.server.credentials.username,
-        password: config.server.credentials.password
-    })
-);
+try {
+    await client.login();
+} catch (err) {
+    client.account = {
+        headers: client.authHeaders,
+        rootUrl: config.server.serverUrl,
+        principalUrl: config.server.serverUrl,
+        homeUrl: config.server.serverUrl,
+        accountType: client.accountType
+    };
+}
 
-const account = await dav.createAccount({
-    server: config.server.serverUrl,
-    xhr: xhr,
-    loadObjects: true,
-    filters: [
-        {
-            type: 'comp-filter',
-            attrs: {name: 'VCALENDAR'},
-            children: [
-                {
-                    type: 'comp-filter',
-                    attrs: { name: 'VTODO' }
-                }
-            ]
-        }   
-    ]
-});
+let calendars = [];
+let items = new Map();
 
+async function updateCalendars() {
+    items.clear();
+    console.log('updating calendars');
+    let allCalendars = await client.fetchCalendars();
 
-let calendars = account.calendars.filter(calendar => {
-    return calendar.components.includes('VTODO')
-}).sort((a,b) => {
-    return a.displayName.localeCompare(b.displayName);
-}); 
+    calendars = allCalendars.filter(calendar => {
+        return calendar.components.includes('VTODO')
+    }).sort((a,b) => {
+        return a.displayName.localeCompare(b.displayName);
+    }); 
 
-
-let items = [];
-
-calendars.forEach(calendar => {
-    calendar.objects.forEach(object => {
-        //console.log(calendar.c);
-        items.push({
-            id : object.etag.replaceAll('"',''),
-            calendarId : calendar.ctag,
-            type: 'task',
-            format: 'jcal',
-            item: ical.parse(object.calendarData) 
-            // in calendar.props we have also the calendarTimezone property 
-            // that could be used
-            // item must be in jcal format
+    calendars.forEach(async calendar => {
+        let objects = await client.fetchCalendarObjects({ calendar: calendar });
+        objects.forEach(object => {
+            //console.log(object);
+            let item = ical.parse(object.data);
+            let jcal = new JCAL.Calendar(item);
+            let todo = jcal.first('vtodo');
+            //console.log(todo.data);
+            items.set(todo.uid, {
+                id : todo.uid,//object.etag.replaceAll('"',''),
+                calendarId : calendar.ctag,
+                type: 'task',
+                format: 'jcal',
+                item: item,
+                data : object
+                // in calendar.props we have also the calendarTimezone property 
+                // that could be used
+                // item must be in jcal format
+            });
         });
     });
-});
+}
 
-let req = dav.request.propfind({
-    props: [
-        { name: 'displayname', namespace: 'DAV:' },
-        { name: 'getctag', namespace: 'http://calendarserver.org/ns/' },
-        { name: 'calendar-color', namespace: 'http://apple.com/ns/ical/' }        
-    ],
-    depth: 1    
-});
-
-let responses = await xhr.send(req, account.homeUrl);
-
-let colors = {};
-
-responses.forEach(response => {
-    colors[response.props.getctag] = response.props.calendarColor ? response.props.calendarColor : 'white';
-});   
-
+await updateCalendars();
 
 app.get( '/calendars', async (req, res) => {
     let list = calendars.map(calendar => {
         return {
             id: calendar.ctag,
             name: calendar.displayName,
-            color: colors[calendar.ctag],
+            color: calendar.calendarColor,
             url: calendar.url
         }
     });
@@ -108,48 +96,79 @@ app.get( '/calendars/:id', (req, res) => {
     res.json({
         id: calendar.ctag,
         name: calendar.displayName,
-        color: colors[calendar.ctag],
+        color: calendar.calendarColor,
         url: calendar.url
     });
 });
 
 app.get( '/items', (req, res) => {
-    res.json(items);
+    //console.log(Array.from(items.values()));
+    res.json(Array.from(items.values()));
 });
 
 app.get( '/items/:cid/:id', (req, res) => {
-    let item = items.find(
-        item => item.id === req.params.id && item.calendarId === req.params.cid
-    );
+    let item = items.get(req.params.id);
+    if (!item) {
+        res.status(404).end();
+    }
+
+    if (item.calendarId !== req.params.cid) {
+        res.status(404).end();
+    }
     res.json(item);
 });
 
-
-app.delete('/items/:cid/:id', async (req, res) => {
+app.post('/items/:cid', async (req, res) => {
     let calendar = calendars.find(calendar => calendar.ctag === req.params.cid);
     if (calendar) {
-        let objectToRemove = calendar.objects.find(item =>
-            item.etag === `"${req.params.id}"`
-        );
-        if (objectToRemove) {
-            console.log(objectToRemove, xhr);
-            try {
-                await dav.deleteCalendarObject(objectToRemove, { xhr: xhr});
-            } catch(err) {
-                console.log(err);
-            }
-            res.status(200);
-        } else { res.status(404); }
+        let jCalendar = JCAL.Calendar.default();
+        jCalendar.version = "2.0";
+        jCalendar.prodid = "-//icanban.org/icanban-express v1.0//EN";
+        let jTodo = new JCAL.Todo(req.body.item);
+        jCalendar.addComponent(jTodo);
+        jTodo.uid = jTodo.uid || uuid.v1();
+        jTodo.dtstamp = (new Date()).toISOString(); 
+
+        let pushObject = {
+            calendar: calendar, 
+            filename: `${jTodo.uid}.ics`,
+            iCalString : ical.stringify(jCalendar.data),
+            fetchOptions : { mode: 'no-cors' }
+        };
+        await client.createCalendarObject(pushObject);
+        await updateCalendars();        
+        res.status(200).end();
     } else {
-        res.status(404);
+        res.status(404).end();
     }
-    res.status(200);
+    res.status(200).end();
+
+
+});
+
+app.delete('/items/:cid/:id', async (req, res) => {
+    let item = items.get(req.params.id);
+    if (!item) {
+        res.status(404).end();
+    }
+
+    if (item.calendarId !== req.params.cid) {
+        res.status(404).end();
+    }
+
+    let objectToRemove = item.data;
+
+    if (objectToRemove) {
+        await client.deleteCalendarObject({calendarObject: objectToRemove});
+        await updateCalendars();
+        res.status(200).end();
+    } 
+    res.status(404).end();
 });
 
 /*****************************************************************************
  * This part is required for the express backend
  * **************************************************************************/
-app.use(express.json());
 
 app.use('/ui', express.static('ui'));
 app.use('/scripts', express.static('scripts'));
