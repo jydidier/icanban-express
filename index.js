@@ -26,6 +26,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
  * This part is dedicated to calendar management
  * **************************************************************************/
 const client = new tsdav.DAVClient(config.server);
+let dirty = true;
 
 try {
     await client.login();
@@ -74,11 +75,14 @@ async function updateCalendars() {
             });
         });
     });
+    dirty = false;
 }
 
-await updateCalendars();
+//await updateCalendars();
 
 app.get( '/calendars', async (req, res) => {
+    if (dirty) await updateCalendars();
+
     let list = calendars.map(calendar => {
         return {
             id: calendar.ctag,
@@ -91,6 +95,7 @@ app.get( '/calendars', async (req, res) => {
 }); 
 
 app.get( '/calendars/:id', (req, res) => {
+    if (dirty) await updateCalendars();
     let calendar = calendars.find(calendar => calendar.ctag === req.params.id);
 
     res.json({
@@ -103,10 +108,12 @@ app.get( '/calendars/:id', (req, res) => {
 
 app.get( '/items', (req, res) => {
     //console.log(Array.from(items.values()));
+    if (dirty) await updateCalendars();
     res.json(Array.from(items.values()));
 });
 
 app.get( '/items/:cid/:id', (req, res) => {
+    if (dirty) await updateCalendars();
     let item = items.get(req.params.id);
     if (!item) {
         res.status(404).end();
@@ -119,6 +126,7 @@ app.get( '/items/:cid/:id', (req, res) => {
 });
 
 app.post('/items/:cid', async (req, res) => {
+    dirty = true;
     let calendar = calendars.find(calendar => calendar.ctag === req.params.cid);
     if (calendar) {
         let jCalendar = JCAL.Calendar.default();
@@ -142,18 +150,80 @@ app.post('/items/:cid', async (req, res) => {
         res.status(404).end();
     }
     res.status(200).end();
-
-
 });
 
-app.delete('/items/:cid/:id', async (req, res) => {
+app.put("/items/move/:cid/:newcid/:id", async (req, res) => {
+    dirty = true;
     let item = items.get(req.params.id);
     if (!item) {
         res.status(404).end();
+        return;
+    }
+    if (item.calendarId !== req.params.cid) {
+        res.status(404).end();
+        return;
+    }
+
+    let objectToRemove = item.data;
+    let jCalendar = new JCAL.Calendar(item.data);
+    let jTodo = jCalendar.first("vtodo");
+
+    if (objectToRemove) {
+        await client.deleteCalendarObject({calendarObject: objectToRemove});
+    } 
+
+    let calendar = calendars.find(calendar => calendar.ctag === req.params.newcid);
+ 
+    let pushObject = {
+        calendar: calendar, 
+        filename: `${jTodo.uid}.ics`,
+        iCalString : ical.stringify(item.data),
+        fetchOptions : { mode: 'no-cors' }
+    };
+    await client.createCalendarObject(pushObject);
+    await updateCalendars();        
+    res.status(200).end();
+});
+
+
+app.put("/items/:cid/:id", async (req, res) => {
+    dirty = true;
+    let item = items.get(req.params.id);
+    if (!item) {
+        res.status(404).end();
+        return;
+    }
+    if (item.calendarId !== req.params.cid) {
+        res.status(404).end();
+        return ;
+    }
+
+    Object.assign(item.item, req.body.item);
+
+    let pushObject = {
+        calendarObject: {
+            url : item.url,
+            data : ical.stringify(jCalendar.data),
+            etag : item.etag
+        }
+    }
+
+    await client.updateCalendarObject(pushObject);
+    await updateCalendars();        
+    res.status(200).end();
+});
+
+app.delete('/items/:cid/:id', async (req, res) => {
+    dirty = true;
+    let item = items.get(req.params.id);
+    if (!item) {
+        res.status(404).end();
+        return;
     }
 
     if (item.calendarId !== req.params.cid) {
         res.status(404).end();
+        return;
     }
 
     let objectToRemove = item.data;
@@ -162,6 +232,7 @@ app.delete('/items/:cid/:id', async (req, res) => {
         await client.deleteCalendarObject({calendarObject: objectToRemove});
         await updateCalendars();
         res.status(200).end();
+        return;
     } 
     res.status(404).end();
 });

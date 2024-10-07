@@ -22,11 +22,6 @@ const calendars =  {
 
 calendars.element.addEventListener('updated', function() { console.log('toto'); });
   
-// onCreated : new EventTarget(),
-//     onUpdated : new EventTarget(),
-//     onRemoved : new EventTarget()
-// }
-
 const items = new EventTarget();
 items.get = async function(calendarId, id) {
     let url = `${location.origin}/items/${calendarId}/${id}`;
@@ -51,10 +46,25 @@ items.create = async function(calendarId, item) {
         headers: {"Content-Type": "application/json"}
     });
     calendars.element.dispatchEvent(new Event('updated'));
-    return;
 };
-items.update = function() {};
-items.move = function() {};
+items.update = async function(cid,id,data) {
+    let url = `${location.origin}/items/${calendarId}/${id}`;
+    let response = await fetch(url, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: {"Content-Type": "application/json"}
+    });
+    calendars.element.dispatchEvent(new Event('updated'));
+};
+items.move = async function(cid, newcid, id) {
+    let url = `${location.origin}/items/move/${cid}/${newcid}/${id}`;
+    let response = await fetch(url, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: {"Content-Type": "application/json"}
+    });
+    calendars.element.dispatchEvent(new Event('updated'));
+};
 items.remove = async function(cid, id) {
     console.log('trying to remove', id);
     let url = `${location.origin}/items/${cid}/${id}`;
@@ -62,8 +72,5 @@ items.remove = async function(cid, id) {
     calendars.element.dispatchEvent(new Event('updated'));
     return ;
 };
-//     onCreated : new EventTarget(),
-//     onUpdated : new EventTarget(),
-//     onRemoved : new EventTarget()
 
 export { calendars, items };
