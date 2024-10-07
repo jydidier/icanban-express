@@ -47,7 +47,7 @@ items.create = async function(calendarId, item) {
     });
     calendars.element.dispatchEvent(new Event('updated'));
 };
-items.update = async function(cid,id,data) {
+items.update = async function(calendarId,id,data) {
     let url = `${location.origin}/items/${calendarId}/${id}`;
     let response = await fetch(url, {
         method: 'PUT',
@@ -59,9 +59,7 @@ items.update = async function(cid,id,data) {
 items.move = async function(cid, newcid, id) {
     let url = `${location.origin}/items/move/${cid}/${newcid}/${id}`;
     let response = await fetch(url, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-        headers: {"Content-Type": "application/json"}
+        method: 'PUT'
     });
     calendars.element.dispatchEvent(new Event('updated'));
 };

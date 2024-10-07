@@ -52,7 +52,7 @@ let drop = async (event) => {
         let data = JSON.parse(event.dataTransfer.getData("text/plain"));
         /* necessary as an instant feedback for the user */
         target.appendChild(document.getElementById(data.id));
-
+        /* todo: this is a bug, we should not rely on the status property */
         await mc.items.update(data.calendarId, data.id, { status: target.id });
     }
 };

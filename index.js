@@ -4,6 +4,7 @@ import express from 'express';
 import process from 'node:process';
 import open from 'open';
 import bodyParser from 'body-parser';
+import crypto from 'crypto';
 import * as uuid from 'uuid';
 import * as JCAL from './scripts/jcal.js';
 
@@ -47,24 +48,27 @@ async function updateCalendars() {
     items.clear();
     console.log('updating calendars');
     let allCalendars = await client.fetchCalendars();
-
+    
     calendars = allCalendars.filter(calendar => {
         return calendar.components.includes('VTODO')
     }).sort((a,b) => {
         return a.displayName.localeCompare(b.displayName);
     }); 
 
-    calendars.forEach(async calendar => {
+    console.log('updating items');
+    for (const calendar of calendars) {
+        calendar.id = crypto.createHash('md5').update(calendar.url).digest('hex');
+
         let objects = await client.fetchCalendarObjects({ calendar: calendar });
+        //console.log('calendar', calendar.displayName, calendar.ctag, calendar);
         objects.forEach(object => {
-            //console.log(object);
             let item = ical.parse(object.data);
             let jcal = new JCAL.Calendar(item);
             let todo = jcal.first('vtodo');
-            //console.log(todo.data);
+
             items.set(todo.uid, {
                 id : todo.uid,//object.etag.replaceAll('"',''),
-                calendarId : calendar.ctag,
+                calendarId : calendar.id,
                 type: 'task',
                 format: 'jcal',
                 item: item,
@@ -74,7 +78,7 @@ async function updateCalendars() {
                 // item must be in jcal format
             });
         });
-    });
+    }
     dirty = false;
 }
 
@@ -85,7 +89,7 @@ app.get( '/calendars', async (req, res) => {
 
     let list = calendars.map(calendar => {
         return {
-            id: calendar.ctag,
+            id: calendar.id,
             name: calendar.displayName,
             color: calendar.calendarColor,
             url: calendar.url
@@ -94,25 +98,25 @@ app.get( '/calendars', async (req, res) => {
     res.json(list);
 }); 
 
-app.get( '/calendars/:id', (req, res) => {
+app.get( '/calendars/:id', async (req, res) => {
     if (dirty) await updateCalendars();
-    let calendar = calendars.find(calendar => calendar.ctag === req.params.id);
+    let calendar = calendars.find(calendar => calendar.id === req.params.id);
 
     res.json({
-        id: calendar.ctag,
+        id: calendar.id,
         name: calendar.displayName,
         color: calendar.calendarColor,
         url: calendar.url
     });
 });
 
-app.get( '/items', (req, res) => {
-    //console.log(Array.from(items.values()));
+app.get( '/items', async (req, res) => {
     if (dirty) await updateCalendars();
+    //console.log(Array.from(items.values()));
     res.json(Array.from(items.values()));
 });
 
-app.get( '/items/:cid/:id', (req, res) => {
+app.get( '/items/:cid/:id', async (req, res) => {
     if (dirty) await updateCalendars();
     let item = items.get(req.params.id);
     if (!item) {
@@ -127,7 +131,7 @@ app.get( '/items/:cid/:id', (req, res) => {
 
 app.post('/items/:cid', async (req, res) => {
     dirty = true;
-    let calendar = calendars.find(calendar => calendar.ctag === req.params.cid);
+    let calendar = calendars.find(calendar => calendar.id === req.params.cid);
     if (calendar) {
         let jCalendar = JCAL.Calendar.default();
         jCalendar.version = "2.0";
@@ -156,31 +160,35 @@ app.put("/items/move/:cid/:newcid/:id", async (req, res) => {
     dirty = true;
     let item = items.get(req.params.id);
     if (!item) {
+        console.log('item not found');
         res.status(404).end();
         return;
     }
     if (item.calendarId !== req.params.cid) {
+        console.log('associated calendar not found', item.calendarId, req.params.cid, req.params.newcid);
         res.status(404).end();
         return;
     }
 
     let objectToRemove = item.data;
-    let jCalendar = new JCAL.Calendar(item.data);
+    let jCalendar = new JCAL.Calendar(ical.parse(objectToRemove.data));
     let jTodo = jCalendar.first("vtodo");
+    jTodo.uid = uuid.v1();
+
+    let calendar = calendars.find(calendar => calendar.id === req.params.newcid);
+ 
+    let pushObject = {
+        calendar: calendar, 
+        filename: `${jTodo.uid}.ics`,
+        iCalString : ical.stringify(jCalendar.data),
+        fetchOptions : { mode: 'no-cors' }
+    };
+    await client.createCalendarObject(pushObject);
 
     if (objectToRemove) {
         await client.deleteCalendarObject({calendarObject: objectToRemove});
     } 
 
-    let calendar = calendars.find(calendar => calendar.ctag === req.params.newcid);
- 
-    let pushObject = {
-        calendar: calendar, 
-        filename: `${jTodo.uid}.ics`,
-        iCalString : ical.stringify(item.data),
-        fetchOptions : { mode: 'no-cors' }
-    };
-    await client.createCalendarObject(pushObject);
     await updateCalendars();        
     res.status(200).end();
 });
@@ -197,16 +205,21 @@ app.put("/items/:cid/:id", async (req, res) => {
         res.status(404).end();
         return ;
     }
+    console.log(req.body.item);
 
-    Object.assign(item.item, req.body.item);
+    //console.log(item);
+    let jcal = new JCAL.Calendar(item.data.data);
+    console.log(jcal);
+    Object.assign(jcal, req.body.item);
+
 
     let pushObject = {
         calendarObject: {
-            url : item.url,
-            data : ical.stringify(jCalendar.data),
-            etag : item.etag
+            url : item.data.url,
+            data : ical.stringify(jcal.data),
+            etag : item.data.etag
         }
-    }
+    };
 
     await client.updateCalendarObject(pushObject);
     await updateCalendars();        
