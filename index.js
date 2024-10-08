@@ -46,7 +46,6 @@ let items = new Map();
 
 async function updateCalendars() {
     items.clear();
-    console.log('updating calendars');
     let allCalendars = await client.fetchCalendars();
     
     calendars = allCalendars.filter(calendar => {
@@ -55,12 +54,10 @@ async function updateCalendars() {
         return a.displayName.localeCompare(b.displayName);
     }); 
 
-    console.log('updating items');
     for (const calendar of calendars) {
         calendar.id = crypto.createHash('md5').update(calendar.url).digest('hex');
 
         let objects = await client.fetchCalendarObjects({ calendar: calendar });
-        //console.log('calendar', calendar.displayName, calendar.ctag, calendar);
         objects.forEach(object => {
             let item = ical.parse(object.data);
             let jcal = new JCAL.Calendar(item);
@@ -81,8 +78,6 @@ async function updateCalendars() {
     }
     dirty = false;
 }
-
-//await updateCalendars();
 
 app.get( '/calendars', async (req, res) => {
     if (dirty) await updateCalendars();
@@ -112,7 +107,6 @@ app.get( '/calendars/:id', async (req, res) => {
 
 app.get( '/items', async (req, res) => {
     if (dirty) await updateCalendars();
-    //console.log(Array.from(items.values()));
     res.json(Array.from(items.values()));
 });
 
@@ -147,9 +141,8 @@ app.post('/items/:cid', async (req, res) => {
             iCalString : ical.stringify(jCalendar.data),
             fetchOptions : { mode: 'no-cors' }
         };
-        await client.createCalendarObject(pushObject);
-        await updateCalendars();        
-        res.status(200).end();
+        let subres = await client.createCalendarObject(pushObject);
+        res.status(subres.status).end();
     } else {
         res.status(404).end();
     }
@@ -183,13 +176,18 @@ app.put("/items/move/:cid/:newcid/:id", async (req, res) => {
         iCalString : ical.stringify(jCalendar.data),
         fetchOptions : { mode: 'no-cors' }
     };
-    await client.createCalendarObject(pushObject);
+    let firstres = await client.createCalendarObject(pushObject);
+    if (firstres.status >= 400) {
+        res.status(firstres.status).end();
+        return
+    }
 
     if (objectToRemove) {
-        await client.deleteCalendarObject({calendarObject: objectToRemove});
+        let subres = await client.deleteCalendarObject({calendarObject: objectToRemove});
+        res.status(subres.status).end();
+        return;
     } 
 
-    await updateCalendars();        
     res.status(200).end();
 });
 
@@ -205,13 +203,10 @@ app.put("/items/:cid/:id", async (req, res) => {
         res.status(404).end();
         return ;
     }
-    console.log(req.body.item);
+    let jcal = new JCAL.Calendar(item.item);
+    let newTodo = new JCAL.Todo(req.body.item);
 
-    //console.log(item);
-    let jcal = new JCAL.Calendar(item.data.data);
-    console.log(jcal);
-    Object.assign(jcal, req.body.item);
-
+    jcal.first('vtodo').merge(newTodo);
 
     let pushObject = {
         calendarObject: {
@@ -221,9 +216,8 @@ app.put("/items/:cid/:id", async (req, res) => {
         }
     };
 
-    await client.updateCalendarObject(pushObject);
-    await updateCalendars();        
-    res.status(200).end();
+    let subres = await client.updateCalendarObject(pushObject);
+    res.status(subres.status).end();
 });
 
 app.delete('/items/:cid/:id', async (req, res) => {
@@ -242,9 +236,8 @@ app.delete('/items/:cid/:id', async (req, res) => {
     let objectToRemove = item.data;
 
     if (objectToRemove) {
-        await client.deleteCalendarObject({calendarObject: objectToRemove});
-        await updateCalendars();
-        res.status(200).end();
+        let subres = await client.deleteCalendarObject({calendarObject: objectToRemove});
+        res.status(subres.status).end();
         return;
     } 
     res.status(404).end();

@@ -52,8 +52,9 @@ let drop = async (event) => {
         let data = JSON.parse(event.dataTransfer.getData("text/plain"));
         /* necessary as an instant feedback for the user */
         target.appendChild(document.getElementById(data.id));
-        /* todo: this is a bug, we should not rely on the status property */
-        await mc.items.update(data.calendarId, data.id, { status: target.id });
+        let jtodo = new JCAL.Todo();
+        jtodo.status = target.id;
+        await mc.items.update(data.calendarId, data.id, { format: "jcal", item: jtodo.data });
     }
 };
 
@@ -289,12 +290,14 @@ const sortStrategies = {
     "dueDateASort" : (ai, bi) => {
         const a = asTodo(ai);
         const b = asTodo(bi);
-        return new String(a.due || '').localeCompare(b.due || '');
+        console.log('sort', a.due, b.due);
+        return (new String(a.due || '')).localeCompare(b.due || '');
     },
     "dueDateDSort" : (ai, bi) => {
         const a = asTodo(ai);
         const b = asTodo(bi);
-        return new String(b.due || '').localeCompare(a.due || '');
+        console.log('sort', a.due, b.due);
+        return (new String(b.due || '')).localeCompare(a.due || '');
     }
 }
 
@@ -309,6 +312,7 @@ if (applySortButton) {
         } else {
             localStorage.setItem("icanban-sort", JSON.stringify(sortValue));
         }
+        console.log('defined sort', sort);
         refreshBoard();
     });
 }
@@ -348,12 +352,14 @@ let populateBoard = async () => {
         }   
         return true;
     });
+    console.log('items', items);
     if (sort) {
         items.sort(sort);
     }
+
+    console.log('items', items);
     let counts = { "NEEDS-ACTION": 0, "IN-PROCESS": 0, "COMPLETED": 0 };
-    items.forEach(async element => {
-        //console.log('element', element);    
+    for(const element of items) {
         let todo = asTodo(element);
 
         // we need to filter out if element is already on the board
@@ -451,7 +457,7 @@ let populateBoard = async () => {
             document.getElementById("in-process-count").textContent = counts["IN-PROCESS"];
             document.getElementById("completed-count").textContent = counts["COMPLETED"];
         }
-    });
+    }
 
     document.getElementById("needs-action-count").textContent = counts["NEEDS-ACTION"];
     document.getElementById("in-process-count").textContent = counts["IN-PROCESS"];
@@ -506,7 +512,7 @@ if (globalThis.messenger !== undefined) {
     mc.items.addEventListener("updated",refreshBoard);
     mc.items.addEventListener("removed",refreshBoard);
 
-    mc.calendars.element.addEventListener("created",refreshBoard);
-    mc.calendars.element.addEventListener("updated",refreshBoard);
-    mc.calendars.element.addEventListener("removed",refreshBoard);
+    mc.calendars.addEventListener("created",refreshBoard);
+    mc.calendars.addEventListener("updated",refreshBoard);
+    mc.calendars.addEventListener("removed",refreshBoard);
 }
