@@ -290,13 +290,11 @@ const sortStrategies = {
     "dueDateASort" : (ai, bi) => {
         const a = asTodo(ai);
         const b = asTodo(bi);
-        console.log('sort', a.due, b.due);
         return (new String(a.due || '')).localeCompare(b.due || '');
     },
     "dueDateDSort" : (ai, bi) => {
         const a = asTodo(ai);
         const b = asTodo(bi);
-        console.log('sort', a.due, b.due);
         return (new String(b.due || '')).localeCompare(a.due || '');
     }
 }
@@ -308,9 +306,12 @@ if (applySortButton) {
         let sortValue = Array.from(document.querySelectorAll('#sortList input')).find(input => input.checked).value;
         sort = (sortValue === "none") ? null : sortStrategies[sortValue];
         if( globalThis.browser !== undefined) {
+            console.log( 'setting sort (browser)', sortValue);
             await browser.storage.local.set({ "icanban-sort": sortValue} );   
         } else {
+            console.log( 'setting sort', sortValue);
             localStorage.setItem("icanban-sort", JSON.stringify(sortValue));
+            console.log('stored in local storage', localStorage.getItem("icanban-sort"));
         }
         console.log('defined sort', sort);
         refreshBoard();
@@ -350,14 +351,15 @@ let populateBoard = async () => {
         if (filter.priority !== undefined && asTodo(item).priority !== filter.priority) {
             return false;
         }   
+        if (!globalThis.browser && filter.calendarId !== undefined && !filter.calendarId.includes(item.calendarId)) {
+            return false;
+        }
         return true;
     });
-    console.log('items', items);
     if (sort) {
         items.sort(sort);
     }
 
-    console.log('items', items);
     let counts = { "NEEDS-ACTION": 0, "IN-PROCESS": 0, "COMPLETED": 0 };
     for(const element of items) {
         let todo = asTodo(element);
@@ -483,8 +485,9 @@ if (globalThis.browser !== undefined) {
     filterPrefs = await browser.storage.local.get("icanban-filter");
     sortPrefs = await browser.storage.local.get("icanban-sort");
 } else {
-    filterPrefs = JSON.parse(localStorage.getItem("icanban-filter")) ?? {};
-    sortPrefs = JSON.parse(localStorage.getItem("icanban-sort")) ?? {};
+    filterPrefs["icanban-filter"] = JSON.parse(localStorage.getItem("icanban-filter")) ?? undefined;
+    sortPrefs["icanban-sort"] = JSON.parse(localStorage.getItem("icanban-sort")) ?? undefined;
+
 }
 
 if (filterPrefs["icanban-filter"] !== undefined) {
